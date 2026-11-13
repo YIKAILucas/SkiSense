@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>SkiSense · 滑雪姿势分析</title>
+  <style>
+    :root {
+      color: #112c39;
+      background: #eff5f7;
+      font-family: Inter, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+      font-size: 16px;
+      --accent: #086481;
+      --muted: #506775;
+      --line: #d8e6eb;
+    }
+    * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
+    body { margin: 0; }
+    a { color: var(--accent); text-underline-offset: .2em; }
+    a:hover { text-decoration-thickness: 2px; }
+    :focus-visible { outline: 3px solid #147b99; outline-offset: 3px; }
+    .shell { max-width: 69rem; margin: auto; padding: 0 clamp(1rem, 4vw, 2.5rem); }
+    header { background: #122d3b; color: white; }
+    header .shell { padding-block: 1.1rem; }
+    .brand { font-weight: 750; letter-spacing: -.02em; }
+    .intro { padding: clamp(2.4rem, 6vw, 4rem) 0 1.8rem; }
+    h1, h2, p { margin: 0; }
+    h1 { font-size: clamp(2rem, 5vw, 3.15rem); line-height: 1.18; letter-spacing: -.045em; }
+    h2 { font-size: 1.3rem; line-height: 1.4; }
+    p { line-height: 1.65; }
+    .intro p { margin-top: .85rem; color: var(--muted); }
+    .workspace { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.12fr); gap: 1.15rem; align-items: start; }
+    .card { background: #fff; border: 1px solid var(--line); border-radius: 1.1rem; padding: clamp(1.05rem, 3vw, 1.6rem); }
+    .limits { color: var(--muted); font-size: .92rem; margin: .3rem 0 1rem; }
+    .drop {
+      display: grid; position: relative; place-content: center; gap: .3rem;
+      min-height: 8.25rem; padding: 1rem; text-align: center; cursor: pointer;
+      border: 1.5px dashed #82acba; border-radius: .8rem; background: #f4fafb;
+    }
+    .drop:hover, .drop:focus-within, .drop[data-drag="true"] { border-color: var(--accent); background: #e8f6f9; }
+    .drop:focus-within { outline: 3px solid #147b99; outline-offset: 3px; }
+    .drop input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+    .drop:has(:disabled), .drop input:disabled { cursor: wait; }
+    .drop strong { color: var(--accent); }
+    .drop span { color: var(--muted); font-size: .88rem; }
+    .file { margin-top: .7rem; overflow-wrap: anywhere; font-size: .9rem; }
+    button {
+      width: 100%; min-height: 2.85rem; margin-top: 1rem; padding: .6rem 1rem;
+      border: 0; border-radius: .65rem; color: #fff; background: var(--accent);
+      font: inherit; font-weight: 700; cursor: pointer;
+    }
+    button:hover:not(:disabled) { background: #074c63; }
+    button:disabled { background: #dee9ed; color: #445e6d; cursor: default; }
+    .status { margin-top: .75rem; display: flex; gap: .65rem; align-items: flex-start; font-size: .92rem; }
+    .status:empty { display: none; }
+    .status[data-kind="error"] { color: #9e291d; }
+    .status[data-kind="busy"]::before {
+      content: ""; flex: 0 0 .85rem; height: .85rem; margin-top: .28rem;
+      border: 2px solid #adcbd5; border-top-color: var(--accent); border-radius: 50%; animation: spin .9s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @media (prefers-reduced-motion: reduce) { .status[data-kind="busy"]::before { animation: none; } }
+    .tip { margin-top: 1rem; padding-top: .85rem; border-top: 1px solid var(--line); color: var(--muted); font-size: .88rem; }
+    .placeholder {
+      display: grid; align-content: center; min-height: 12.25rem; margin-top: .9rem;
+      padding: 1.4rem; border-radius: .8rem; color: var(--muted); background: #f1f6f8;
+    }
+    .placeholder strong { color: #244653; }
+    .placeholder p { margin-top: .35rem; font-size: .92rem; }
+    .results { margin-top: .9rem; }
+    video { display: block; width: 100%; max-height: 34rem; border-radius: .65rem; background: #122d3b; }
+    .downloads { display: flex; flex-wrap: wrap; gap: .55rem 1.2rem; margin-top: .85rem; font-size: .92rem; }
+    #no-best { margin-top: .7rem; color: var(--muted); font-size: .9rem; }
+    #best-frame { display: block; width: 100%; max-height: 25rem; object-fit: contain; margin-top: .85rem; border-radius: .65rem; background: #122d3b; }
+    footer { display: flex; flex-wrap: wrap; gap: .55rem 1.1rem; padding: 1.25rem 0 2rem; font-size: .87rem; }
+    @media (max-width: 46rem) { .workspace { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <header><div class="shell"><span class="brand">SkiSense</span></div></header>
+  <main class="shell">
+    <div class="intro">
+      <h1>滑雪姿势分析</h1>
+      <p>上传滑雪视频，查看标注了关节角度和姿势评分的回放。</p>
+    </div>
+    <div class="workspace">
+      <section class="card" aria-labelledby="upload-title">
+        <h2 id="upload-title">上传视频</h2>
+        <p class="limits" id="limits">支持 MP4、MOV 和 WebM。最大 8 MB，最长 10 秒，最长边不超过 2160 像素。一次处理一个视频。</p>
+        <form id="upload-form">
+          <label class="drop" id="drop" for="file">
+            <strong>选择视频</strong>
+            <span>也可将视频拖到这里</span>
+            <input type="file" id="file" accept="video/mp4,video/quicktime,video/webm,.mp4,.mov,.webm" aria-describedby="limits">
+          </label>
+          <p class="file" id="file-name" hidden></p>
+          <button type="submit" id="submit" disabled>开始分析</button>
+          <p class="status" id="status" role="status" aria-live="polite" aria-atomic="true"></p>
+          <noscript><p class="tip">请启用 JavaScript 后上传视频。</p></noscript>
+        </form>
+        <p class="tip">2D 分析根据画面估算关节角度。建议选择单人、全身可见且镜头稳定的片段。</p>
+      </section>
+      <section class="card" aria-labelledby="results-title">
+        <h2 id="results-title">分析结果</h2>
+        <div class="placeholder" id="placeholder">
+          <strong>等待视频</strong>
+          <p>分析完成后，可播放和下载标注视频。如有可评分的姿势，还会显示评分最高的一帧。</p>
+        </div>
+        <div class="results" id="results" hidden>
+          <video id="result-video" controls playsinline preload="metadata" aria-label="滑雪姿势分析视频"></video>
+          <div class="downloads">
+            <a id="video-download" download="skisense-analysis.mp4">下载分析视频</a>
+            <a id="best-download" download="skisense-best.jpg" hidden>下载评分最高的画面</a>
+          </div>
+          <p id="no-best" hidden>这段视频未检测到可评分的姿势。</p>
+          <img id="best-frame" alt="姿势评分最高的一帧" hidden>
+          <p class="tip">分析结果最多保留 30 分钟，请及时下载。</p>
+        </div>
+      </section>
+    </div>
+    <footer>
+      <a href="https://github.com/kmch4n/SkiSense">SkiSense 上游项目</a>
+      <a href="/source">下载本站源代码</a>
+      <a href="https://github.com/ultralytics/ultralytics/tree/v8.4.0">YOLO 源代码</a>
+      <a href="https://github.com/ultralytics/assets/releases/tag/v8.4.0">模型权重</a>
+    </footer>
+  </main>
+  <script>
+    const form = document.getElementById('upload-form');
+    const drop = document.getElementById('drop');
+    const fileInput = document.getElementById('file');
+    const fileName = document.getElementById('file-name');
+    const submit = document.getElementById('submit');
+    const status = document.getElementById('status');
+    const placeholder = document.getElementById('placeholder');
+    const results = document.getElementById('results');
+    const video = document.getElementById('result-video');
+    const videoDownload = document.getElementById('video-download');
+    const bestDownload = document.getElementById('best-download');
+    const bestFrame = document.getElementById('best-frame');
+    const noBest = document.getElementById('no-best');
+    const maxBytes = 8 * 1024 * 1024;
+    let selectedFile;
+    let processing = false;
+
+    function showStatus(message, kind = '') {
+      if (status.textContent !== message) status.textContent = message;
+      status.dataset.kind = kind;
+    }
+
+    function selectFile(file) {
+      selectedFile = undefined;
+      fileName.hidden = true;
+      if (!file) {
+        showStatus('');
+      } else if (file.size === 0) {
+        showStatus('所选视频为空，请选择另一个文件。', 'error');
+      } else if (file.size > maxBytes) {
+        showStatus('视频超过 8 MB，请压缩或裁剪后再上传。', 'error');
+      } else if (!/\.(mp4|mov|webm)$/i.test(file.name)) {
+        showStatus('请选择 MP4、MOV 或 WebM 格式的视频。', 'error');
+      } else {
+        selectedFile = file;
+        fileName.textContent = file.name;
+        fileName.hidden = false;
+        showStatus('');
+      }
+      submit.disabled = !selectedFile;
+    }
+
+    fileInput.addEventListener('change', () => selectFile(fileInput.files[0]));
+    for (const eventName of ['dragenter', 'dragover']) {
+      drop.addEventListener(eventName, (event) => {
+        event.preventDefault();
+        if (!processing) drop.dataset.drag = 'true';
+      });
+    }
+    drop.addEventListener('dragleave', (event) => {
+      if (!drop.contains(event.relatedTarget)) delete drop.dataset.drag;
+    });
+    drop.addEventListener('drop', (event) => {
+      event.preventDefault();
+      delete drop.dataset.drag;
+      if (processing) return;
+      fileInput.value = '';
+      if (event.dataTransfer.files.length > 1) {
+        selectFile(undefined);
+        showStatus('每次只能上传一个视频。', 'error');
+      } else {
+        selectFile(event.dataTransfer.files[0]);
+      }
+    });
+
+    function setProcessing(active) {
+      processing = active;
+      fileInput.disabled = active;
+      submit.disabled = active || !selectedFile;
+      submit.textContent = active ? '正在分析…' : '开始分析';
+    }
+
+    function clearResults() {
+      if (!results.hidden) {
+        video.pause();
+        video.removeAttribute('src');
+        video.load();
+        bestFrame.removeAttribute('src');
+      }
+      results.hidden = true;
+      placeholder.hidden = false;
+    }
+
+    function showResults(path, hasBestFrame) {
+      video.src = `${path}/video`;
+      videoDownload.href = `${path}/video`;
+      bestDownload.hidden = !hasBestFrame;
+      bestFrame.hidden = !hasBestFrame;
+      noBest.hidden = hasBestFrame;
+      if (hasBestFrame) {
+        bestDownload.href = `${path}/best`;
+        bestFrame.src = `${path}/best`;
+      }
+      placeholder.hidden = true;
+      results.hidden = false;
+    }
+
+    async function waitForResult(path) {
+      let failures = 0;
+      while (true) {
+        await new Promise((resolve) => setTimeout(resolve, 2500));
+        let response;
+        let job;
+        try {
+          response = await fetch(path, { cache: 'no-store' });
+          job = await response.json().catch(() => ({}));
+        } catch {
+          // Treat intermittent network errors like a server restart.
+        }
+        if (!response || response.status >= 500) {
+          failures += 1;
+          if (failures >= 5) throw new Error('暂时无法获取分析进度，请稍后重试。');
+          showStatus('正在重新连接，视频可能仍在分析。', 'busy');
+          continue;
+        }
+        if (!response.ok) throw new Error(job.error || '无法获取分析进度，请重新上传视频。');
+        failures = 0;
+        if (job.status === 'done') return job;
+        if (job.status === 'error') throw new Error(job.error || '分析失败，请尝试另一个视频。');
+        if (job.status === 'queued') {
+          showStatus('视频已上传，正在排队。', 'busy');
+        } else if (job.status === 'running') {
+          showStatus('正在分析视频，请保留此页面。', 'busy');
+        } else {
+          throw new Error('无法获取分析进度，请重新上传视频。');
+        }
+      }
+    }
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      if (!selectedFile || processing) return;
+      setProcessing(true);
+      showStatus('正在上传视频…', 'busy');
+      try {
+        const data = new FormData();
+        data.append('video', selectedFile);
+        const response = await fetch('/api/jobs', { method: 'POST', body: data });
+        const job = await response.json().catch(() => ({}));
+        if (response.status === 429) throw new Error(job.error || '当前已有视频在分析，请稍后再试。');
+        if (!response.ok || !job.id) throw new Error(job.error || '视频上传失败，请重试。');
+        clearResults();
+        showStatus('视频已上传，正在准备分析。', 'busy');
+        const path = `/api/jobs/${encodeURIComponent(job.id)}`;
+        const completed = await waitForResult(path);
+        showResults(path, completed.best === true);
+        showStatus('分析完成。');
+      } catch (error) {
+        showStatus(error instanceof TypeError ? '网络连接失败，请检查连接后重试。' : error.message, 'error');
+      } finally {
+        setProcessing(false);
+      }
+    });
+  </script>
+</body>
+</html>
