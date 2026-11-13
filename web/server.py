@@ -75,7 +75,6 @@ def work(job_id):
         env = os.environ | {
             "OMP_NUM_THREADS": "1", "OPENBLAS_NUM_THREADS": "1", "MKL_NUM_THREADS": "1",
             "SKISENSE_DEVICE": "cpu", "SKISENSE_SHOW_GUI": "false",
-            "SKISENSE_YOLO_POSE_MODEL": "yolo11n-pose.pt", "YOLO_CONFIG_DIR": str(folder),
         }
         analysis = folder / "analysis"
         subprocess.run([sys.executable, "-m", "web.worker", str(normal), str(analysis)],

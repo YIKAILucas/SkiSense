@@ -6,3 +6,4 @@ dist
 input/*
 output/*
 models/*
+web/assets/*.onnx

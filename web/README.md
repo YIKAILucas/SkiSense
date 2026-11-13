@@ -2,7 +2,7 @@
 
 Based on [kmch4n/SkiSense](https://github.com/kmch4n/SkiSense) at `8ef19827365f84a800b5302c5b323be092ed955a`.
 The browser interface invokes the upstream drawing and scoring pipeline with the
-CPU YOLO11n-Pose model. The 3D backend and ankle scoring are unavailable in this mode.
+CPU YOLO11n-Pose model in ONNX Runtime. The 3D backend and ankle scoring are unavailable in this mode.
 
 The service processes one MP4, MOV, or WebM clip at a time. Uploads must be at most
 8 MiB and 10 seconds, with a longest side of 2160 pixels. The server resizes each
@@ -18,5 +18,15 @@ listens on `0.0.0.0:$PORT` (default 10000).
 The upstream source remains MIT under the root `LICENSE`. The web adaptation is
 licensed under [AGPL-3.0](COPYING); it combines the upstream project with Ultralytics
 YOLO, distributed under AGPL-3.0. The web page links to its deployable source archive
-at `/source`, the [versioned Ultralytics source](https://github.com/ultralytics/ultralytics/tree/v8.4.0),
+at `/source`, the [versioned Ultralytics source](https://github.com/ultralytics/ultralytics/tree/v8.4.23),
 and the [YOLO11 model release](https://github.com/ultralytics/assets/releases/tag/v8.4.0).
+
+To reproduce `web/assets/yolo11n-pose.onnx`, use Ultralytics 8.4.23, ONNX 1.23.2,
+and ONNX Slim 0.1.99. Download the official `yolo11n-pose.pt` from the linked
+release (SHA-256 `869e83fcdffdc7371fa4e34cd8e51c838cc729571d1635e5141e3075e9319dc0`),
+then run:
+
+```python
+from ultralytics import YOLO
+YOLO('yolo11n-pose.pt').export(format='onnx', imgsz=640, nms=True, dynamic=False, opset=17)
+```

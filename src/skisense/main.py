@@ -29,13 +29,10 @@ from datetime import datetime
 from typing import Dict, Optional, Tuple
 
 import numpy as np
-import torch
 from tqdm import tqdm
 
 with SuppressStderr():
     import cv2
-    from deep_sort_realtime.deepsort_tracker import DeepSort
-    from ultralytics import YOLO
     from .pose_analyzer import COLORS
 
 
@@ -127,6 +124,8 @@ def resolve_device(preference: str):
             - use_gpu: True if GPU (CUDA/MPS) is available
             - device_str: "cuda" | "mps" | "cpu"
     """
+    import torch
+
     preference = preference.lower().strip()
 
     if preference == "cpu":
@@ -377,14 +376,19 @@ def load_yolo_model(device, use_gpu: bool):
     yolo_model_path = os.path.join(MODEL_DIR, YOLO_MODEL)
 
     with SuppressStderr():
+        from ultralytics import YOLO
+
         yolo_model = YOLO(yolo_model_path)
         if use_gpu:
             yolo_model.to(device)
     return yolo_model
 
 
-def create_deepsort_tracker(device_str: str) -> DeepSort:
+def create_deepsort_tracker(device_str: str):
     """Create a Deep SORT tracker with the project defaults."""
+    with SuppressStderr():
+        from deep_sort_realtime.deepsort_tracker import DeepSort
+
     tracker_kwargs = {
         "max_age": DEEPSORT_MAX_AGE,
         "n_init": DEEPSORT_N_INIT,
@@ -643,6 +647,8 @@ def process_video(
     fast_mode: bool = False,
     target_mode: Optional[str] = None,
     pose_backend_name: Optional[str] = None,
+    *,
+    pose_backend_factory=None,
 ):
     """Main processing function for video input.
 
@@ -653,6 +659,8 @@ def process_video(
         target_mode: "longest" locks zoom to the longest visible track.
         pose_backend_name: "sam3d" or "yolo11". Overrides
             ``SKISENSE_POSE_BACKEND`` when given.
+        pose_backend_factory: Optional CPU backend for fast, full-frame
+            inference without PyTorch or the tracking dependencies.
     """
     if video_file is None:
         video_file = "video.mp4"
@@ -662,16 +670,24 @@ def process_video(
     if target_mode not in ("longest", "largest"):
         raise ValueError(f"Unsupported target_mode: {target_mode}")
 
-    DEVICE, USE_CUDA, DEVICE_STR = resolve_device(DEVICE_PREFERENCE)
+    if pose_backend_factory is None:
+        DEVICE, USE_CUDA, DEVICE_STR = resolve_device(DEVICE_PREFERENCE)
+        pose_backend_factory = get_backend
+    else:
+        if not fast_mode or target_mode != "largest":
+            raise ValueError("A custom CPU backend requires fast mode and largest target selection")
+        DEVICE, USE_CUDA, DEVICE_STR = None, False, "cpu"
 
     if DEVICE_STR == "cuda":
+        import torch
+
         torch.backends.cudnn.benchmark = True
 
     log_message(f"Using device: {DEVICE_STR.upper()}")
     if USE_CUDA:
         log_message(f"GPU acceleration: enabled ({DEVICE})")
 
-    pose_backend = get_backend(
+    pose_backend = pose_backend_factory(
         running_mode="video",
         device=DEVICE,
         use_gpu=USE_CUDA,

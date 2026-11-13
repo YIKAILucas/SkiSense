@@ -16,6 +16,7 @@ build/
 # Models (in models/ directory)
 models/*.task
 models/*.pt
+web/assets/*.onnx
 !models/.gitkeep
 
 # YOLO outputs
